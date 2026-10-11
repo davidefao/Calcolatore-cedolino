@@ -1,0 +1,15 @@
+{
+  "nome": "Provider B",
+  "file": { "foglio": 0, "riga_intestazione": null, "separatore": ";", "encoding": "cp1252" },
+  "data": { "colonna": "col_5", "formato": "%Y%m%d" },
+  "importo": { "colonna": "col_9", "decimale": ",", "migliaia": "" },
+  "dipendente": {
+    "tipo": "nome",
+    "colonne": ["col_2", "col_3"]
+  },
+  "trattamento": {
+    "colonne": ["col_4"],
+    "sottocategoria": null,
+    "eccezioni": []
+  }
+}
