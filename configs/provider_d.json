@@ -1,0 +1,21 @@
+{
+  "nome": "Provider D",
+  "file": { "foglio": 0, "riga_intestazione": 1, "separatore": ";", "encoding": "auto" },
+  "data": { "colonna": "Data di assegnazione", "formato": "%d/%m/%Y" },
+  "importo": { "colonna": "Valore", "decimale": ",", "migliaia": "" },
+  "dipendente": {
+    "tipo": "nome",
+    "colonne": ["Nome dipendente", "Cognome dipendente"]
+  },
+  "trattamento": {
+    "colonne": ["Riferimento al TUIR"],
+    "sottocategoria": "Tipologia di servizio",
+    "eccezioni": [
+      {
+        "trattamento": "Art. 51 c.2 lett. f-bis",
+        "sottocategoria": "Asilo nido",
+        "voce": "373"
+      }
+    ]
+  }
+}
