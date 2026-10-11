@@ -44,6 +44,22 @@ class Movimento:
     fuori_periodo: bool = False
     motivo_fuori: str = ""   # es. "data 2026-08-28 (agosto 2026)" o "data non leggibile"
     data_testo: str = ""
+    duplicato: bool = False  # seconda copia (o successiva) di una riga identica già letta
+
+
+@dataclass
+class GruppoDuplicati:
+    """Una riga del report che compare più volte, identica in tutte le colonne."""
+    righe: list              # numeri di riga nel file, in ordine
+    etichetta: str
+    voce: str
+    importo_cent: int
+    data_testo: str
+    fuori_periodo: bool = False
+
+    @property
+    def volte(self) -> int:
+        return len(self.righe)
 
 
 @dataclass
@@ -59,6 +75,7 @@ class Preparazione:
     movimenti: list = field(default_factory=list)
     scarti: list = field(default_factory=list)
     avvisi: list = field(default_factory=list)
+    duplicati: list = field(default_factory=list)      # lista di GruppoDuplicati
 
     @property
     def fuori_periodo(self) -> list:
@@ -78,6 +95,7 @@ class Risultato:
     avvisi: list
     movimenti_inclusi: int
     movimenti_esclusi: int       # esclusi perché fuori periodo su scelta dell'utente
+    duplicati_rimossi: int = 0   # copie tolte su scelta dell'utente
 
     def testo_output(self) -> str:
         return "".join(r + TERMINATORE_RIGA for r in self.righe_output)
@@ -159,6 +177,7 @@ def prepara(tabella: TabellaLetta, config: dict, ditta: int, periodo: str,
     cfg_tr, cfg_data = config["trattamento"], config["data"]
     prep = Preparazione(righe_lette=len(tabella.righe))
     avvisi_visti = set()
+    gruppi = {}               # riga identica -> movimenti che la ripetono
 
     for r in tabella.righe:
         etichetta = " ".join(
@@ -195,10 +214,21 @@ def prepara(tabella: TabellaLetta, config: dict, ditta: int, periodo: str,
         except ErroreDato:
             fuori, motivo = True, f"data non leggibile («{data_testo}»)" if data_testo else "data mancante"
 
-        prep.movimenti.append(Movimento(
+        movimento = Movimento(
             riga=r.numero, dipendente=dip.codice, etichetta=etichetta, voce=voce,
             importo_cent=cent, fuori_periodo=fuori, motivo_fuori=motivo,
-            data_testo=data_testo))
+            data_testo=data_testo)
+        copie = gruppi.setdefault(tuple(r.valori.values()), [])
+        movimento.duplicato = bool(copie)               # dalla seconda copia in poi
+        copie.append(movimento)
+        prep.movimenti.append(movimento)
+
+    prep.duplicati = [
+        GruppoDuplicati(righe=[m.riga for m in copie], etichetta=copie[0].etichetta,
+                        voce=copie[0].voce, importo_cent=copie[0].importo_cent,
+                        data_testo=copie[0].data_testo, fuori_periodo=copie[0].fuori_periodo)
+        for copie in gruppi.values() if len(copie) > 1
+    ]
     return prep
 
 
@@ -210,14 +240,18 @@ def _ordine(codice: str):
 
 
 def genera(prep: Preparazione, ditta: int, periodo: str,
-           includi_fuori_periodo: bool = True) -> Risultato:
+           includi_fuori_periodo: bool = True, tieni_duplicati: bool = True) -> Risultato:
+    """tieni_duplicati=False toglie le copie successive alla prima di ogni riga ripetuta."""
     periodo = valida_periodo(periodo)
     somme = defaultdict(int)
-    inclusi = esclusi = 0
+    inclusi = esclusi = rimossi = 0
 
     for m in prep.movimenti:
         if m.fuori_periodo and not includi_fuori_periodo:
             esclusi += 1
+            continue
+        if m.duplicato and not tieni_duplicati:
+            rimossi += 1
             continue
         somme[(m.dipendente, m.voce)] += m.importo_cent
         inclusi += 1
@@ -246,4 +280,5 @@ def genera(prep: Preparazione, ditta: int, periodo: str,
         totale += cent
 
     return Risultato(righe_output=righe, totale_cent=totale, scarti=scarti,
-                     avvisi=avvisi, movimenti_inclusi=inclusi, movimenti_esclusi=esclusi)
+                     avvisi=avvisi, movimenti_inclusi=inclusi, movimenti_esclusi=esclusi,
+                     duplicati_rimossi=rimossi)

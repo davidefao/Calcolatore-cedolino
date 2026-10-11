@@ -9,12 +9,15 @@ from engine.parsing import ErroreDato, periodo_a_testo, valida_periodo
 from engine.reader import ErroreLettura
 from engine.riconciliazione import ErroreInstallazione
 from engine.servizio import (ErroreDitta, conta_cose_da_controllare, converti_file,
-                             elenca_provider, formatta_euro, nome_file_output,
-                             periodo_predefinito, tabella_movimenti, tabella_scarti,
-                             log_anomalie, valida_ditta)
+                             elenca_provider, formatta_euro, log_anomalie,
+                             messaggio_duplicato, nome_file_output, periodo_predefinito,
+                             tabella_duplicati, tabella_movimenti, tabella_scarti,
+                             valida_ditta)
 
 SCELTA_INCLUDI = "Sì, includile nel file"
 SCELTA_ESCLUDI = "No, escludile dal file"
+SCELTA_TIENI = "Tieni tutte le copie"
+SCELTA_TOGLI = "Togli le copie (ne resta una per riga)"
 
 
 def _righe(n, singolare, plurale):
@@ -62,7 +65,8 @@ def _converti(provider, percorso_config, ditta_txt, periodo_txt, file):
                  "Riprova; se si ripete, segnala il problema indicando il file usato.")
         return
 
-    st.session_state.pop("scelta_fuori_periodo", None)     # nuova conversione, nuova scelta
+    st.session_state.pop("scelta_fuori_periodo", None)     # nuova conversione, nuove scelte
+    st.session_state.pop("scelta_duplicati", None)
     st.session_state["esito"] = {
         "firma": _firma(provider, ditta_txt, periodo_txt, file),
         "provider": provider, "ditta": ditta, "periodo": periodo, "prep": prep,
@@ -72,33 +76,67 @@ def _converti(provider, percorso_config, ditta_txt, periodo_txt, file):
 def _mostra_esito(esito):
     prep, ditta, periodo = esito["prep"], esito["ditta"], esito["periodo"]
     fuori = prep.fuori_periodo
+    gruppi = prep.duplicati
 
-    ris_con = genera(prep, ditta, periodo, includi_fuori_periodo=True)
-    ris_senza = genera(prep, ditta, periodo, includi_fuori_periodo=False)
+    def calcola(includi, tieni):
+        # finché una scelta non è fatta si simula "includi / tieni", solo per mostrare i totali
+        return genera(prep, ditta, periodo,
+                      includi_fuori_periodo=True if includi is None else includi,
+                      tieni_duplicati=True if tieni is None else tieni)
 
     st.subheader("4. Controlla l'esito")
 
-    # --- la scelta sulle righe fuori periodo (se ce ne sono) -----------------------------
-    scelta = None
+    # --- scelta 1: righe con la data fuori periodo --------------------------------------
+    scelta_fp = None
     if fuori:
         st.warning(
             f"**Ho trovato {_righe(len(fuori), 'riga con una data che non è', 'righe con una data che non è')} "
             f"di {periodo_a_testo(periodo)}.** Qui sotto le vedi tutte."
         )
-        st.dataframe(tabella_movimenti(fuori, con_motivo=True), hide_index=True,
-                     use_container_width=True)
-        scelta = st.radio(
-            "Vuoi includerle nel file?",
-            [SCELTA_INCLUDI, SCELTA_ESCLUDI], index=None, key="scelta_fuori_periodo",
+        st.dataframe(tabella_movimenti(fuori, con_motivo=True), hide_index=True)
+        scelta_fp = st.radio(
+            "Vuoi includerle nel file?", [SCELTA_INCLUDI, SCELTA_ESCLUDI], index=None,
+            key="scelta_fuori_periodo",
             help="Finché non scegli, il pulsante di download resta disattivato.",
         )
-        st.caption(
-            f"Totale importi con queste righe: **{formatta_euro(ris_con.totale_cent)} €** · "
-            f"senza: **{formatta_euro(ris_senza.totale_cent)} €**"
-        )
+    includi = None if (fuori and scelta_fp is None) else (scelta_fp != SCELTA_ESCLUDI)
 
-    includi = None if (fuori and scelta is None) else (scelta != SCELTA_ESCLUDI)
-    risultato = ris_senza if includi is False else ris_con
+    # --- scelta 2: righe ripetute ---------------------------------------------------------
+    scelta_dup = None
+    if gruppi:
+        n_extra = sum(g.volte - 1 for g in gruppi)
+        st.warning(
+            f"**{'C’è 1 riga ripetuta' if len(gruppi) == 1 else f'Ci sono {len(gruppi)} righe ripetute'}** "
+            f"(identiche in tutte le colonne del file): in tutto "
+            f"{_righe(n_extra, 'copia in più', 'copie in più')}."
+        )
+        for g in gruppi[:5]:
+            st.write("• " + messaggio_duplicato(g))
+        if len(gruppi) > 5:
+            st.write(f"• …e altre {len(gruppi) - 5}. L'elenco completo è qui sotto.")
+        st.dataframe(tabella_duplicati(prep), hide_index=True)
+        scelta_dup = st.radio(
+            "Vuoi tenere le copie o toglierle?", [SCELTA_TIENI, SCELTA_TOGLI], index=None,
+            key="scelta_duplicati",
+            help="Togliendole, di ogni riga ripetuta resta una sola copia (la prima). "
+                 "Finché non scegli, il pulsante di download resta disattivato.",
+        )
+    tieni = None if (gruppi and scelta_dup is None) else (scelta_dup != SCELTA_TOGLI)
+
+    # --- totali a confronto per le scelte ancora aperte ------------------------------------
+    if fuori:
+        st.caption(
+            f"Date fuori periodo, totale importi con queste righe: "
+            f"**{formatta_euro(calcola(True, tieni).totale_cent)} €** · "
+            f"senza: **{formatta_euro(calcola(False, tieni).totale_cent)} €**")
+    if gruppi:
+        st.caption(
+            f"Righe ripetute, totale importi tenendo le copie: "
+            f"**{formatta_euro(calcola(includi, True).totale_cent)} €** · "
+            f"togliendole: **{formatta_euro(calcola(includi, False).totale_cent)} €**")
+
+    risultato = calcola(includi, tieni)
+    in_attesa = includi is None or tieni is None
 
     # --- riepilogo ------------------------------------------------------------------------
     c1, c2, c3, c4 = st.columns(4)
@@ -139,13 +177,18 @@ def _mostra_esito(esito):
 
     # --- download -------------------------------------------------------------------------
     st.subheader("5. Scarica")
-    if not risultato.righe_output and includi is not None:
+    n = len(risultato.righe_output)
+    if in_attesa:
+        mancanti = []
+        if includi is None:
+            mancanti.append("le righe fuori periodo")
+        if tieni is None:
+            mancanti.append("le righe ripetute")
+        st.info(f"Scegli cosa fare con {' e con '.join(mancanti)} per attivare il download.")
+    elif n == 0:
         st.error("Non c'è nessun record da scaricare: tutte le righe sono state scartate. "
                  "Controlla di aver scelto il provider e la ditta giusti.")
-    elif includi is None:
-        st.info("Scegli se includere le righe fuori periodo per attivare il download.")
 
-    n = len(risultato.righe_output)
     if risultato.scarti:
         etichetta = (f"Scarica VOCI comunque ({_righe(n, 'record', 'record')}, "
                      f"{_righe(len(risultato.scarti), 'riga scartata', 'righe scartate')})")
@@ -154,13 +197,13 @@ def _mostra_esito(esito):
     st.download_button(
         etichetta, data=risultato.testo_output().encode("ascii"),
         file_name=nome_file_output(ditta, periodo), mime="text/plain", type="primary",
-        disabled=(includi is None or n == 0),
+        disabled=(in_attesa or n == 0),
     )
 
-    if risultato.scarti or prep.negativi or fuori or risultato.avvisi:
+    if risultato.scarti or prep.negativi or fuori or gruppi or risultato.avvisi:
         st.download_button(
             "Scarica il log delle anomalie",
-            data=log_anomalie(esito["provider"], ditta, periodo, prep, risultato, includi),
+            data=log_anomalie(esito["provider"], ditta, periodo, prep, risultato, includi, tieni),
             file_name=f"LOG_{ditta}_{periodo}.txt", mime="text/plain",
         )
 

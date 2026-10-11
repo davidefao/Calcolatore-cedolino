@@ -129,12 +129,32 @@ def tabella_movimenti(movimenti: list, con_motivo: bool = False) -> list:
     return righe
 
 
+def tabella_duplicati(prep: Preparazione) -> list:
+    """Una riga per ogni gruppo di righe identiche, con il messaggio pronto da leggere."""
+    return [{
+        "Righe nel file": ", ".join(str(n) for n in g.righe),
+        "Dipendente": g.etichetta,
+        "Voce": g.voce,
+        "Importo (€)": formatta_euro(g.importo_cent),
+        "Data": g.data_testo,
+        "Presente": f"{g.volte} volte",
+    } for g in prep.duplicati]
+
+
+def messaggio_duplicato(g) -> str:
+    """'La riga 5 (Rossi Mario, voce 371, 10,00 €) è presente 2 volte (righe 5, 9).'"""
+    return (f"La riga {g.righe[0]} ({g.etichetta}, voce {g.voce}, {formatta_euro(g.importo_cent)} €) "
+            f"è presente {g.volte} volte (righe {', '.join(str(n) for n in g.righe)}).")
+
+
 def conta_cose_da_controllare(prep: Preparazione, risultato: Risultato) -> int:
-    return (len(risultato.scarti) > 0) + (len(prep.negativi) > 0) + (len(prep.fuori_periodo) > 0)
+    return ((len(risultato.scarti) > 0) + (len(prep.negativi) > 0)
+            + (len(prep.fuori_periodo) > 0) + (len(prep.duplicati) > 0))
 
 
 def log_anomalie(nome_provider: str, ditta: int, periodo: str, prep: Preparazione,
-              risultato: Risultato, includi_fuori_periodo: bool | None) -> str:
+                 risultato: Risultato, includi_fuori_periodo: bool | None,
+                 tieni_duplicati: bool | None = True) -> str:
     """Log delle anomalie, scaricabile dall'utente (testo semplice)."""
     righe = [
         f"LOG DELLA CONVERSIONE - {nome_provider} - ditta {ditta} - periodo {periodo} "
@@ -159,5 +179,8 @@ def log_anomalie(nome_provider: str, ditta: int, periodo: str, prep: Preparazion
     sezione(f"DATE FUORI PERIODO - {scelta}", [
         f"riga {m.riga} | {m.etichetta} | voce {m.voce} | {formatta_euro(m.importo_cent)} EUR "
         f"| {m.motivo_fuori}" for m in prep.fuori_periodo])
+    scelta_dup = {True: "TENUTE tutte le copie", False: "TOLTE le copie, tenuta una riga per gruppo",
+                  None: "scelta non fatta"}[tieni_duplicati]
+    sezione(f"RIGHE RIPETUTE - {scelta_dup}", [messaggio_duplicato(g) for g in prep.duplicati])
     sezione("AVVISI", risultato.avvisi)
     return "\n".join(righe)
