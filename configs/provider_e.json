@@ -1,0 +1,16 @@
+{
+  "nome": "Provider E",
+  "file": { "foglio": 0, "riga_intestazione": 1 },
+  "data": { "colonna": "Data", "formato": "%d/%m/%Y" },
+  "importo": { "colonna": "Totale", "decimale": ".", "migliaia": "," },
+  "dipendente": {
+    "tipo": "codice",
+    "colonne": ["Codice Dipendente"],
+    "etichetta": ["Cognome", "Nome"]
+  },
+  "trattamento": {
+    "colonne": ["Articolo"],
+    "sottocategoria": null,
+    "eccezioni": []
+  }
+}
