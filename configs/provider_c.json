@@ -1,0 +1,16 @@
+{
+  "nome": "Provider C",
+  "file": { "foglio": 0, "riga_intestazione": 1 },
+  "data": { "colonna": "Data movimento", "formato": "%d/%m/%Y" },
+  "importo": { "colonna": "Importo totale", "decimale": ".", "migliaia": "" },
+  "dipendente": {
+    "tipo": "codice",
+    "colonne": ["Matricola"],
+    "etichetta": ["Cognome dipendente", "Nome dipendente"]
+  },
+  "trattamento": {
+    "colonne": ["Art.", "Rif. normativi"],
+    "sottocategoria": "Segno a cedolino",
+    "eccezioni": []
+  }
+}
