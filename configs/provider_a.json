@@ -1,0 +1,16 @@
+{
+  "nome": "Provider A",
+  "file": { "foglio": 0, "riga_intestazione": 4 },
+  "data": { "colonna": "Data", "formato": "%Y-%m-%d" },
+  "importo": { "colonna": "Importo", "decimale": ",", "migliaia": "" },
+  "dipendente": {
+    "tipo": "codice_fiscale",
+    "colonne": ["Codice fiscale dipendente"],
+    "etichetta": ["Nome dipendente"]
+  },
+  "trattamento": {
+    "colonne": ["Tratt. Fiscale"],
+    "sottocategoria": null,
+    "eccezioni": []
+  }
+}
