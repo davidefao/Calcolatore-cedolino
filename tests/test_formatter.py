@@ -1,6 +1,8 @@
 from decimal import Decimal
+
 import pytest
-from engine.formatter import formatta_record, euro_a_centesimi
+
+from engine.formatter import euro_a_centesimi, formatta_record
 
 
 def test_esempio_del_brief():
