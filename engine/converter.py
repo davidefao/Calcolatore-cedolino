@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from engine.formatter import formatta_record
 from engine.parsing import (ErroreDato, data_a_periodo, importo_a_centesimi,
                             periodo_a_testo, valida_periodo)
+from datetime import datetime
+
 from engine.reader import TabellaLetta
 from engine.riconciliazione import Anagrafica, CatalogoVoci, ErroreRiconciliazione
 
@@ -110,6 +112,31 @@ def valida_config(c: dict) -> None:
             if k not in c[sezione]:
                 raise ErroreConfigurazione(f"In «{sezione}» manca «{k}»")
 
+    if c["dipendente"]["tipo"] not in Anagrafica.TIPI:
+        raise ErroreConfigurazione(
+            f"In «dipendente» il tipo «{c['dipendente']['tipo']}» non esiste. "
+            f"Valori ammessi: {', '.join(Anagrafica.TIPI)}")
+    for sezione, chiave in (("dipendente", "colonne"), ("trattamento", "colonne")):
+        valore = c[sezione][chiave]
+        if not isinstance(valore, list) or not valore:
+            raise ErroreConfigurazione(f"In «{sezione}» «{chiave}» deve essere un elenco di colonne")
+
+    formato = c["data"]["formato"]
+    try:
+        esempio = datetime(2026, 9, 3).strftime(formato)
+        datetime.strptime(esempio, formato)
+    except (ValueError, TypeError):
+        raise ErroreConfigurazione(f"Il formato della data «{formato}» non è valido") from None
+
+    riga = c["file"].get("riga_intestazione", 1)
+    if riga is not None and (not isinstance(riga, int) or isinstance(riga, bool) or riga < 1):
+        raise ErroreConfigurazione("«riga_intestazione» deve essere un numero da 1 in su, oppure null")
+
+    for e in c["trattamento"].get("eccezioni", []) or []:
+        if not isinstance(e, dict) or "trattamento" not in e or "voce" not in e:
+            raise ErroreConfigurazione(
+                "Ogni eccezione deve avere almeno «trattamento» e «voce»")
+
 
 # ================================================================ fase 1
 
@@ -179,7 +206,7 @@ def prepara(tabella: TabellaLetta, config: dict, ditta: int, periodo: str,
 
 def _ordine(codice: str):
     """Numerico se possibile (4 prima di 10), poi testuale."""
-    return (0, int(codice), "") if codice.isdigit() else (1, 0, codice)
+    return (0, int(codice), "") if codice.isascii() and codice.isdigit() else (1, 0, codice)
 
 
 def genera(prep: Preparazione, ditta: int, periodo: str,

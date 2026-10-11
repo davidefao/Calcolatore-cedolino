@@ -11,8 +11,9 @@ from pathlib import Path
 from engine.converter import (ErroreConfigurazione, Preparazione, Risultato,
                               carica_config, prepara)
 from engine.parsing import ErroreDato, periodo_a_testo, valida_periodo
-from engine.reader import leggi_file
-from engine.riconciliazione import carica_anagrafica, carica_catalogo
+from engine.reader import ErroreLettura, leggi_file
+from engine.riconciliazione import (ErroreInstallazione, carica_anagrafica,
+                                    carica_catalogo)
 
 RADICE = Path(__file__).resolve().parent.parent
 CARTELLA_CONFIG = RADICE / "configs"
@@ -21,8 +22,8 @@ FILE_DIPENDENTI = "Lista_Dipendenti.csv"
 FILE_CODICI = "Codici_Welfare_Voci_Payroll.csv"
 
 
-class ErroreInstallazione(Exception):
-    """Manca qualcosa dell'applicazione (non è colpa del file dell'utente)."""
+class ErroreDitta(Exception):
+    """La ditta indicata non risulta nella lista dei dipendenti."""
 
 
 # ---------------------------------------------------------------- input
@@ -42,7 +43,7 @@ def valida_ditta(testo: str) -> int:
     t = (testo or "").strip()
     if not t:
         raise ErroreDato("Inserisci il codice ditta.")
-    if not t.isdigit():
+    if not (t.isascii() and t.isdigit()):
         raise ErroreDato("Il codice ditta deve contenere solo cifre, ad esempio 4012.")
     if len(t) > 6:
         raise ErroreDato("Il codice ditta può avere al massimo 6 cifre.")
@@ -80,9 +81,26 @@ def converti_file(percorso_config: Path, contenuto: bytes, nome_file: str,
             f"nella cartella {cartella_riconciliazione.name}."
         ) from e
 
+    try:
+        anagrafica = carica_anagrafica(dipendenti, ditta)
+        catalogo = carica_catalogo(codici)
+    except ErroreLettura as e:
+        raise ErroreInstallazione(f"Un file di riconciliazione non è leggibile: {e}") from e
+    if not anagrafica.dipendenti:
+        raise ErroreDitta(
+            f"Nella lista dei dipendenti non c'è nessuna persona per la ditta {ditta}. "
+            "Controlla il codice ditta."
+        )
+
     tabella = leggi_file(contenuto, nome_file, config["file"])
-    return prepara(tabella, config, ditta, periodo,
-                   carica_anagrafica(dipendenti, ditta), carica_catalogo(codici))
+    if not tabella.righe:
+        riga = config["file"].get("riga_intestazione", 1)
+        dove = f" dopo la riga di intestazione ({riga})" if riga else ""
+        raise ErroreLettura(
+            f"Nel file non ho trovato righe di dati{dove}. "
+            "Controlla di aver scelto il provider giusto."
+        )
+    return prepara(tabella, config, ditta, periodo, anagrafica, catalogo)
 
 
 # ---------------------------------------------------------------- presentazione

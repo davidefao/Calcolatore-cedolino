@@ -16,6 +16,18 @@ class ErroreRiconciliazione(Exception):
     """Dipendente o voce non trovati (o ambigui). Il messaggio va nel log."""
 
 
+class ErroreInstallazione(Exception):
+    """Manca o è sbagliato un file dell'applicazione (non è colpa del file dell'utente)."""
+
+
+def _richiedi_colonne(tabella, colonne: list, nome_file: str) -> None:
+    mancanti = [c for c in colonne if c not in tabella.colonne]
+    if mancanti:
+        raise ErroreInstallazione(
+            f"Nel file «{nome_file}» mancano le colonne: {', '.join(mancanti)}."
+        )
+
+
 # ================================================================ dipendenti
 
 @dataclass(frozen=True)
@@ -64,6 +76,8 @@ class Anagrafica:
 def carica_anagrafica(contenuto: bytes, ditta: int) -> Anagrafica:
     """Legge Lista_Dipendenti e tiene solo la ditta richiesta, senza doppioni."""
     tabella = leggi_file(contenuto, "Lista_Dipendenti.csv", {"separatore": ","})
+    _richiedi_colonne(tabella, ["Codice Ditta", "CodAnagraficoLav", "Nome Dipendente",
+                                "CodiceFiscale"], "Lista_Dipendenti.csv")
     ditta_txt = str(int(ditta))
     visti, dipendenti = set(), []
     for r in tabella.righe:
@@ -170,6 +184,7 @@ class CatalogoVoci:
 def carica_catalogo(contenuto: bytes) -> CatalogoVoci:
     """Legge Codici_Welfare_Voci_Payroll (virgole tra virgolette incluse)."""
     tabella = leggi_file(contenuto, "Codici_Welfare_Voci_Payroll.csv", {"separatore": ","})
+    _richiedi_colonne(tabella, ["Trattamento", "Codice"], "Codici_Welfare_Voci_Payroll.csv")
     righe = [
         RigaCodice(
             trattamento=r.valori["Trattamento"],

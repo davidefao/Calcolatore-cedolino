@@ -7,7 +7,8 @@ import streamlit as st
 from engine.converter import ErroreConfigurazione, genera
 from engine.parsing import ErroreDato, periodo_a_testo, valida_periodo
 from engine.reader import ErroreLettura
-from engine.servizio import (ErroreInstallazione, conta_cose_da_controllare, converti_file,
+from engine.riconciliazione import ErroreInstallazione
+from engine.servizio import (ErroreDitta, conta_cose_da_controllare, converti_file,
                              elenca_provider, formatta_euro, nome_file_output,
                              periodo_predefinito, tabella_movimenti, tabella_scarti,
                              log_anomalie, valida_ditta)
@@ -46,12 +47,19 @@ def _converti(provider, percorso_config, ditta_txt, periodo_txt, file):
     except (ErroreLettura, ErroreDato) as e:
         st.error(f"Non riesco a leggere il file. {e}")
         return
+    except ErroreDitta as e:
+        st.error(str(e))
+        return
     except ErroreInstallazione as e:
         st.error(f"Problema dell'applicazione, non del tuo file. {e}")
         return
     except ErroreConfigurazione as e:
         st.error(f"Il file non corrisponde a quello che mi aspetto da {provider}. {e} "
                  "Controlla di aver scelto il provider giusto.")
+        return
+    except Exception as e:                                  # rete di sicurezza: mai una pagina rotta
+        st.error(f"Si è verificato un errore imprevisto ({type(e).__name__}). "
+                 "Riprova; se si ripete, segnala il problema indicando il file usato.")
         return
 
     st.session_state.pop("scelta_fuori_periodo", None)     # nuova conversione, nuova scelta
